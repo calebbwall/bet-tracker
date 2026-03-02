@@ -18,6 +18,8 @@
       --wife: #db2777;
       --wife-light: #fce7f3;
       --wife-mid: #f9a8d4;
+      --awaiting: #0ea5e9;
+      --awaiting-light: #e0f2fe;
       --pending: #d97706;
       --pending-light: #fef3c7;
       --danger: #dc2626;
@@ -224,7 +226,8 @@
     .bet-card:last-child { margin-bottom: 0; }
     .bet-card:hover { box-shadow: var(--shadow-md); }
 
-    .bet-card.bet-pending  { border-left: 4px solid var(--pending); }
+    .bet-card.bet-awaiting      { border-left: 4px solid var(--awaiting); }
+    .bet-card.bet-pending       { border-left: 4px solid var(--pending); }
     .bet-card.bet-resolved-me   { border-left: 4px solid var(--me);   opacity: 0.88; }
     .bet-card.bet-resolved-wife { border-left: 4px solid var(--wife); opacity: 0.88; }
 
@@ -246,9 +249,15 @@
       padding: 3px 9px; border-radius: 99px;
       white-space: nowrap;
     }
-    .badge-pending        { background: var(--pending-light); color: var(--pending); }
-    .badge-resolved-me    { background: var(--me-light);      color: var(--me); }
-    .badge-resolved-wife  { background: var(--wife-light);    color: var(--wife); }
+    .badge-awaiting       { background: var(--awaiting-light); color: var(--awaiting); }
+    .badge-pending        { background: var(--pending-light);  color: var(--pending); }
+    .badge-resolved-me    { background: var(--me-light);       color: var(--me); }
+    .badge-resolved-wife  { background: var(--wife-light);     color: var(--wife); }
+
+    .btn-approve { background: var(--me-light);  color: var(--me); }
+    .btn-approve:hover { background: var(--me);  color: #fff; }
+    .btn-reject  { background: #fee2e2; color: var(--danger); }
+    .btn-reject:hover  { background: var(--danger); color: #fff; }
 
     .bet-description { font-size: 0.93rem; color: var(--text); line-height: 1.5; margin-bottom: 12px; }
 
@@ -360,6 +369,17 @@
     <button class="filter-btn" data-filter="wife">Ally's Bets</button>
   </div>
 
+  <!-- Awaiting Approval -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Awaiting Approval</div>
+      <span class="section-count" id="awaiting-count">0</span>
+    </div>
+    <div class="section-body">
+      <div id="awaiting-bets"><div class="loading-state">Connecting…</div></div>
+    </div>
+  </div>
+
   <!-- Pending -->
   <div class="section">
     <div class="section-header">
@@ -428,7 +448,7 @@ function isValidBet(b) {
     typeof b.description === 'string' &&
     VALID_PERSONS.has(b.madeBy) &&
     typeof b.date === 'string' &&
-    (b.status === 'pending' || b.status === 'resolved') &&
+    (b.status === 'awaiting' || b.status === 'pending' || b.status === 'resolved') &&
     (b.winner === null || VALID_PERSONS.has(b.winner)) &&
     (b.resolvedDate === null || typeof b.resolvedDate === 'string')
   );
@@ -446,11 +466,11 @@ async function addBet(description, madeBy, dateStr) {
       description,
       madeBy,
       date: dateStr,
-      status: 'pending',
+      status: 'awaiting',
       winner: null,
       resolvedDate: null,
     });
-    showToast('Bet added!');
+    showToast('Bet submitted — waiting for approval.');
   } catch (err) {
     console.error(err);
     showToast('Error adding bet — check your connection.');
@@ -478,6 +498,26 @@ async function deleteBet(id) {
   } catch (err) {
     console.error(err);
     showToast('Error deleting bet — check your connection.');
+  }
+}
+
+async function approveBet(id) {
+  try {
+    await updateDoc(doc(db, 'bets', id), { status: 'pending' });
+    showToast('Bet accepted — it\'s on!');
+  } catch (err) {
+    console.error(err);
+    showToast('Error approving bet — check your connection.');
+  }
+}
+
+async function rejectBet(id) {
+  try {
+    await deleteDoc(doc(db, 'bets', id));
+    showToast('Bet rejected and removed.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error rejecting bet — check your connection.');
   }
 }
 
@@ -556,6 +596,7 @@ function renderScoreboard(bets) {
 function createBetCard(bet) {
   const resolvedClass = bet.status === 'resolved'
     ? (bet.winner === 'me' ? 'bet-resolved-me' : 'bet-resolved-wife')
+    : bet.status === 'awaiting' ? 'bet-awaiting'
     : 'bet-pending';
 
   const card   = el('div', { class: 'bet-card ' + resolvedClass });
@@ -570,7 +611,10 @@ function createBetCard(bet) {
   header.appendChild(meta);
 
   let badgeClass, badgeText;
-  if (bet.status === 'pending') {
+  if (bet.status === 'awaiting') {
+    badgeClass = 'bet-badge badge-awaiting';
+    badgeText  = 'Awaiting Approval';
+  } else if (bet.status === 'pending') {
     badgeClass = 'bet-badge badge-pending';
     badgeText  = 'Pending';
   } else {
@@ -584,7 +628,28 @@ function createBetCard(bet) {
   desc.textContent = bet.description;
   card.appendChild(desc);
 
-  if (bet.status === 'pending') {
+  if (bet.status === 'awaiting') {
+    const actions = el('div', { class: 'bet-actions' });
+    actions.appendChild(el('span', { class: 'resolve-label' }, 'Approve?'));
+
+    actions.appendChild(el('button', {
+      class: 'btn btn-approve',
+      'aria-label': 'Accept this bet',
+      onclick: () => {
+        if (window.confirm('Accept this bet? It will move to Pending.')) approveBet(bet.id);
+      },
+    }, 'Accept'));
+
+    actions.appendChild(el('button', {
+      class: 'btn btn-reject',
+      'aria-label': 'Reject this bet',
+      onclick: () => {
+        if (window.confirm('Reject and delete this bet?')) rejectBet(bet.id);
+      },
+    }, 'Reject'));
+
+    card.appendChild(actions);
+  } else if (bet.status === 'pending') {
     const actions = el('div', { class: 'bet-actions' });
     actions.appendChild(el('span', { class: 'resolve-label' }, 'Resolve:'));
 
@@ -641,8 +706,18 @@ function render(allBets) {
     ? allBets
     : allBets.filter(b => b.madeBy === currentFilter);
 
+  const awaiting = filtered.filter(b => b.status === 'awaiting');
   const pending  = filtered.filter(b => b.status === 'pending');
   const resolved = filtered.filter(b => b.status === 'resolved');
+
+  const awaitingEl = document.getElementById('awaiting-bets');
+  awaitingEl.textContent = '';
+  document.getElementById('awaiting-count').textContent = String(awaiting.length);
+  if (awaiting.length === 0) {
+    awaitingEl.appendChild(el('div', { class: 'empty-state' }, 'No bets waiting for approval.'));
+  } else {
+    awaiting.forEach(b => awaitingEl.appendChild(createBetCard(b)));
+  }
 
   const pendingEl = document.getElementById('pending-bets');
   pendingEl.textContent = '';
