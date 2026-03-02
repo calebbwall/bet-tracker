@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$1 Bet Tracker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --me: #059669;
+      --me-light: #d1fae5;
+      --me-mid: #6ee7b7;
+      --wife: #db2777;
+      --wife-light: #fce7f3;
+      --wife-mid: #f9a8d4;
+      --pending: #d97706;
+      --pending-light: #fef3c7;
+      --danger: #dc2626;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 10px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Header ───────────────────────────────────── */
+    .app-header {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #fff;
+      padding: 28px 20px 22px;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(79,70,229,0.35);
+    }
+    .app-header h1 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px; }
+    .app-header p  { font-size: 0.9rem; opacity: 0.82; margin-top: 5px; }
+
+    /* ── Container ────────────────────────────────── */
+    .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
+
+    /* ── Scoreboard ───────────────────────────────── */
+    .scoreboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin: 22px 0 20px;
+    }
+    .score-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px 10px;
+      text-align: center;
+      box-shadow: var(--shadow);
+      border-top: 4px solid transparent;
+    }
+    .score-card.score-me   { border-top-color: var(--me); }
+    .score-card.score-wife { border-top-color: var(--wife); }
+    .score-card.score-net  { border-top-color: var(--primary); }
+
+    .score-name  { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .score-value { font-size: 2rem; font-weight: 800; margin: 5px 0 3px; line-height: 1; }
+    .score-me   .score-value { color: var(--me); }
+    .score-wife .score-value { color: var(--wife); }
+    .score-net  .score-value { color: var(--primary); }
+    .score-sub  { font-size: 0.72rem; color: var(--text-muted); min-height: 1rem; }
+
+    /* ── Card / Section ───────────────────────────── */
+    .section {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title { font-size: 0.95rem; font-weight: 700; flex: 1; }
+    .section-count {
+      background: var(--border);
+      color: var(--text-muted);
+      border-radius: 99px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 9px;
+    }
+    .section-body { padding: 18px 20px; }
+
+    /* ── Form ─────────────────────────────────────── */
+    .form-grid { display: grid; gap: 14px; }
+    .form-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+    label { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+
+    input[type="text"],
+    input[type="datetime-local"],
+    select {
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.92rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      width: 100%;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      appearance: auto;
+    }
+    input[type="text"]:focus,
+    input[type="datetime-local"]:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+    }
+
+    /* ── Buttons ──────────────────────────────────── */
+    .btn {
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.83rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 8px 14px;
+      transition: background 0.15s, color 0.15s, transform 0.1s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      line-height: 1;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      padding: 12px 20px;
+      font-size: 0.95rem;
+      width: 100%;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      letter-spacing: 0.01em;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .btn-me   { background: var(--me-light);   color: var(--me); }
+    .btn-wife { background: var(--wife-light);  color: var(--wife); }
+    .btn-me:hover   { background: var(--me);   color: #fff; }
+    .btn-wife:hover { background: var(--wife); color: #fff; }
+
+    .btn-delete { background: #fee2e2; color: var(--danger); margin-left: auto; }
+    .btn-delete:hover { background: var(--danger); color: #fff; }
+
+    /* ── Filter bar ───────────────────────────────── */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 7px 16px;
+      border-radius: 99px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-family: inherit;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .filter-btn.active                         { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .filter-btn[data-filter="me"].active       { background: var(--me);      border-color: var(--me); }
+    .filter-btn[data-filter="wife"].active     { background: var(--wife);    border-color: var(--wife); }
+
+    /* ── Bet cards ────────────────────────────────── */
+    .bet-card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin-bottom: 11px;
+      background: #fff;
+      transition: box-shadow 0.15s;
+    }
+    .bet-card:last-child { margin-bottom: 0; }
+    .bet-card:hover { box-shadow: var(--shadow-md); }
+
+    .bet-card.bet-pending  { border-left: 4px solid var(--pending); }
+    .bet-card.bet-resolved-me   { border-left: 4px solid var(--me);   opacity: 0.88; }
+    .bet-card.bet-resolved-wife { border-left: 4px solid var(--wife); opacity: 0.88; }
+
+    .bet-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 9px; }
+    .bet-meta   { flex: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+
+    .bet-person {
+      font-size: 0.7rem; font-weight: 800;
+      padding: 2px 8px; border-radius: 99px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .bet-person-me   { background: var(--me-light);   color: var(--me); }
+    .bet-person-wife { background: var(--wife-light);  color: var(--wife); }
+
+    .bet-date { font-size: 0.76rem; color: var(--text-muted); }
+
+    .bet-badge {
+      font-size: 0.7rem; font-weight: 700;
+      padding: 3px 9px; border-radius: 99px;
+      white-space: nowrap;
+    }
+    .badge-pending        { background: var(--pending-light); color: var(--pending); }
+    .badge-resolved-me    { background: var(--me-light);      color: var(--me); }
+    .badge-resolved-wife  { background: var(--wife-light);    color: var(--wife); }
+
+    .bet-description { font-size: 0.93rem; color: var(--text); line-height: 1.5; margin-bottom: 12px; }
+
+    .bet-actions {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .resolve-label { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); }
+
+    .bet-footer { display: flex; align-items: center; gap: 8px; }
+    .bet-resolved-date { font-size: 0.76rem; color: var(--text-muted); flex: 1; }
+
+    /* ── Empty state ──────────────────────────────── */
+    .empty-state {
+      text-align: center; padding: 30px 20px;
+      color: var(--text-muted); font-size: 0.88rem;
+    }
+
+    /* ── Toast ────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background: #1e293b; color: #fff;
+      padding: 10px 20px; border-radius: 99px;
+      font-size: 0.85rem; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      transition: transform 0.3s ease;
+      z-index: 999; white-space: nowrap;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Responsive ───────────────────────────────── */
+    @media (max-width: 500px) {
+      .form-row { grid-template-columns: 1fr; }
+      .score-value { font-size: 1.6rem; }
+      .score-name  { font-size: 0.62rem; }
+      .section-body { padding: 14px; }
+      .app-header h1 { font-size: 1.5rem; }
+    }
+    @media (max-width: 350px) {
+      .scoreboard { gap: 8px; }
+      .score-card { padding: 12px 6px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="container">
+    <h1>$1 Bet Tracker</h1>
+    <p>Me vs. Wife &mdash; every dollar counts</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Scoreboard -->
+  <div id="scoreboard" class="scoreboard" role="region" aria-label="Scoreboard"></div>
+
+  <!-- Add Bet Form -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">New Bet</div>
+    </div>
+    <div class="section-body">
+      <form id="bet-form" novalidate>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="bet-description">What's the bet?</label>
+            <input type="text" id="bet-description"
+              placeholder="e.g. Who will win the game tonight"
+              maxlength="500" autocomplete="off" spellcheck="true">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="bet-madeby">Who bet?</label>
+              <select id="bet-madeby">
+                <option value="">Select...</option>
+                <option value="me">Me</option>
+                <option value="wife">Wife</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="bet-date">Date &amp; Time</label>
+              <input type="datetime-local" id="bet-date">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">+ Add Bet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar" role="group" aria-label="Filter bets by person">
+    <button class="filter-btn active" data-filter="all">All Bets</button>
+    <button class="filter-btn" data-filter="me">My Bets</button>
+    <button class="filter-btn" data-filter="wife">Wife's Bets</button>
+  </div>
+
+  <!-- Pending -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Pending</div>
+      <span class="section-count" id="pending-count">0</span>
+    </div>
+    <div class="section-body">
+      <div id="pending-bets"></div>
+    </div>
+  </div>
+
+  <!-- Resolved -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Resolved</div>
+      <span class="section-count" id="resolved-count">0</span>
+    </div>
+    <div class="section-body">
+      <div id="resolved-bets"></div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+/* ── Constants ────────────────────────────────────── */
+const STORAGE_KEY = 'bet_tracker_v1';
+let currentFilter = 'all';
+let toastTimer = null;
+
+/* ── Data validation ──────────────────────────────── */
+const VALID_PERSONS = new Set(['me', 'wife']);
+
+function isValidBet(b) {
+  return (
+    b !== null &&
+    typeof b === 'object' &&
+    typeof b.id === 'string' && b.id.length > 0 &&
+    typeof b.description === 'string' &&
+    VALID_PERSONS.has(b.madeBy) &&
+    typeof b.date === 'string' &&
+    (b.status === 'pending' || b.status === 'resolved') &&
+    (b.winner === null || VALID_PERSONS.has(b.winner)) &&
+    (b.resolvedDate === null || typeof b.resolvedDate === 'string')
+  );
+}
+
+/* ── Storage ──────────────────────────────────────── */
+function getBets() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidBet);
+  } catch {
+    return [];
+  }
+}
+
+function saveBets(bets) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bets));
+  } catch {
+    showToast('Storage error — changes may not be saved.');
+  }
+}
+
+/* ── Bet operations ───────────────────────────────── */
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function addBet(description, madeBy, dateStr) {
+  const bets = getBets();
+  bets.unshift({
+    id: generateId(),
+    description,
+    madeBy,
+    date: dateStr,
+    status: 'pending',
+    winner: null,
+    resolvedDate: null,
+  });
+  saveBets(bets);
+  render();
+  showToast('Bet added!');
+}
+
+function resolveBet(id, winner) {
+  const bets = getBets();
+  const bet = bets.find(b => b.id === id);
+  if (!bet || bet.status === 'resolved') return;
+  bet.status = 'resolved';
+  bet.winner = winner;
+  bet.resolvedDate = new Date().toISOString();
+  saveBets(bets);
+  render();
+  showToast(winner === 'me' ? 'Me wins this one!' : 'Wife wins this one!');
+}
+
+function deleteBet(id) {
+  saveBets(getBets().filter(b => b.id !== id));
+  render();
+  showToast('Bet deleted.');
+}
+
+/* ── DOM helpers ──────────────────────────────────── */
+/**
+ * Create an element with optional attributes and children.
+ * String children are always inserted as text nodes (XSS-safe).
+ */
+function el(tag, attrs, ...children) {
+  const elem = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') {
+        elem.className = v;
+      } else if (k === 'onclick') {
+        elem.addEventListener('click', v);
+      } else if (k === 'type' || k === 'aria-label' || k === 'title') {
+        elem.setAttribute(k, v);
+      }
+      // other attributes intentionally ignored to limit surface area
+    }
+  }
+  for (const child of children) {
+    if (typeof child === 'string') {
+      elem.appendChild(document.createTextNode(child));
+    } else if (child instanceof Node) {
+      elem.appendChild(child);
+    }
+  }
+  return elem;
+}
+
+/* ── Formatting ───────────────────────────────────── */
+function formatDateTime(str) {
+  try {
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    return d.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  } catch {
+    return str;
+  }
+}
+
+/* ── Scoreboard ───────────────────────────────────── */
+function renderScoreboard(bets) {
+  const resolved = bets.filter(b => b.status === 'resolved');
+  const meWins   = resolved.filter(b => b.winner === 'me').length;
+  const wifeWins = resolved.filter(b => b.winner === 'wife').length;
+  const net      = meWins - wifeWins;
+
+  const board = document.getElementById('scoreboard');
+  board.textContent = ''; // clear safely
+
+  /* Me card */
+  const meCard = el('div', { class: 'score-card score-me' });
+  const meName  = el('div', { class: 'score-name' }, 'Me');
+  const meVal   = el('div', { class: 'score-value' }, String(meWins));
+  const meSub   = el('div', { class: 'score-sub' }, meWins === 1 ? '1 win' : meWins + ' wins');
+  meCard.appendChild(meName);
+  meCard.appendChild(meVal);
+  meCard.appendChild(meSub);
+  board.appendChild(meCard);
+
+  /* Balance card */
+  const netCard = el('div', { class: 'score-card score-net' });
+  const netName = el('div', { class: 'score-name' }, 'Balance');
+  let netText, netSub;
+  if (net === 0)      { netText = 'Even';          netSub = resolved.length ? 'All square' : 'No bets yet'; }
+  else if (net > 0)   { netText = '$' + net;        netSub = 'Wife owes Me'; }
+  else                { netText = '$' + (-net);      netSub = 'Me owes Wife'; }
+  const netVal  = el('div', { class: 'score-value' }, netText);
+  const netSubEl = el('div', { class: 'score-sub' }, netSub);
+  netCard.appendChild(netName);
+  netCard.appendChild(netVal);
+  netCard.appendChild(netSubEl);
+  board.appendChild(netCard);
+
+  /* Wife card */
+  const wifeCard = el('div', { class: 'score-card score-wife' });
+  const wifeName  = el('div', { class: 'score-name' }, 'Wife');
+  const wifeVal   = el('div', { class: 'score-value' }, String(wifeWins));
+  const wifeSub   = el('div', { class: 'score-sub' }, wifeWins === 1 ? '1 win' : wifeWins + ' wins');
+  wifeCard.appendChild(wifeName);
+  wifeCard.appendChild(wifeVal);
+  wifeCard.appendChild(wifeSub);
+  board.appendChild(wifeCard);
+}
+
+/* ── Bet card ─────────────────────────────────────── */
+function createBetCard(bet) {
+  const resolvedClass = bet.status === 'resolved'
+    ? (bet.winner === 'me' ? 'bet-resolved-me' : 'bet-resolved-wife')
+    : 'bet-pending';
+
+  const card = el('div', { class: 'bet-card ' + resolvedClass });
+
+  /* Header row */
+  const header = el('div', { class: 'bet-header' });
+  const meta   = el('div', { class: 'bet-meta' });
+
+  const personBadge = el('span', {
+    class: 'bet-person bet-person-' + bet.madeBy,
+    'aria-label': 'Bet made by ' + (bet.madeBy === 'me' ? 'Me' : 'Wife'),
+  }, bet.madeBy === 'me' ? 'Me' : 'Wife');
+  meta.appendChild(personBadge);
+
+  const dateSpan = el('span', { class: 'bet-date' }, formatDateTime(bet.date));
+  meta.appendChild(dateSpan);
+
+  header.appendChild(meta);
+
+  /* Status badge */
+  let badgeClass, badgeText;
+  if (bet.status === 'pending') {
+    badgeClass = 'bet-badge badge-pending';
+    badgeText  = 'Pending';
+  } else {
+    badgeClass = 'bet-badge badge-resolved-' + bet.winner;
+    badgeText  = (bet.winner === 'me' ? 'Me' : 'Wife') + ' won';
+  }
+  const badge = el('span', { class: badgeClass }, badgeText);
+  header.appendChild(badge);
+
+  card.appendChild(header);
+
+  /* Description — user content via textContent (XSS-safe) */
+  const desc = el('div', { class: 'bet-description' });
+  desc.textContent = bet.description;
+  card.appendChild(desc);
+
+  /* Actions */
+  if (bet.status === 'pending') {
+    const actions = el('div', { class: 'bet-actions' });
+    actions.appendChild(el('span', { class: 'resolve-label' }, 'Resolve:'));
+
+    const meBtn = el('button', {
+      class: 'btn btn-me',
+      'aria-label': 'Mark Me as winner',
+      onclick: () => {
+        if (window.confirm('Mark "Me" as the winner of this bet?')) {
+          resolveBet(bet.id, 'me');
+        }
+      },
+    }, 'Me Won');
+    actions.appendChild(meBtn);
+
+    const wifeBtn = el('button', {
+      class: 'btn btn-wife',
+      'aria-label': 'Mark Wife as winner',
+      onclick: () => {
+        if (window.confirm('Mark "Wife" as the winner of this bet?')) {
+          resolveBet(bet.id, 'wife');
+        }
+      },
+    }, 'Wife Won');
+    actions.appendChild(wifeBtn);
+
+    const delBtn = el('button', {
+      class: 'btn btn-delete',
+      'aria-label': 'Delete this bet',
+      onclick: () => {
+        if (window.confirm('Delete this bet permanently?')) {
+          deleteBet(bet.id);
+        }
+      },
+    }, 'Delete');
+    actions.appendChild(delBtn);
+
+    card.appendChild(actions);
+
+  } else {
+    const footer = el('div', { class: 'bet-footer' });
+
+    const resolvedDate = el('span', { class: 'bet-resolved-date' });
+    resolvedDate.textContent = 'Resolved: ' + formatDateTime(bet.resolvedDate);
+    footer.appendChild(resolvedDate);
+
+    const delBtn = el('button', {
+      class: 'btn btn-delete',
+      'aria-label': 'Delete this bet',
+      onclick: () => {
+        if (window.confirm('Delete this resolved bet?')) {
+          deleteBet(bet.id);
+        }
+      },
+    }, 'Delete');
+    footer.appendChild(delBtn);
+
+    card.appendChild(footer);
+  }
+
+  return card;
+}
+
+/* ── Render ───────────────────────────────────────── */
+function render() {
+  const allBets = getBets();
+  renderScoreboard(allBets);
+
+  const filtered = currentFilter === 'all'
+    ? allBets
+    : allBets.filter(b => b.madeBy === currentFilter);
+
+  const pending  = filtered.filter(b => b.status === 'pending');
+  const resolved = filtered.filter(b => b.status === 'resolved');
+
+  /* Pending section */
+  const pendingEl = document.getElementById('pending-bets');
+  pendingEl.textContent = '';
+  document.getElementById('pending-count').textContent = String(pending.length);
+  if (pending.length === 0) {
+    pendingEl.appendChild(el('div', { class: 'empty-state' }, 'No pending bets.'));
+  } else {
+    pending.forEach(b => pendingEl.appendChild(createBetCard(b)));
+  }
+
+  /* Resolved section */
+  const resolvedEl = document.getElementById('resolved-bets');
+  resolvedEl.textContent = '';
+  document.getElementById('resolved-count').textContent = String(resolved.length);
+  if (resolved.length === 0) {
+    resolvedEl.appendChild(el('div', { class: 'empty-state' }, 'No resolved bets yet.'));
+  } else {
+    resolved.forEach(b => resolvedEl.appendChild(createBetCard(b)));
+  }
+}
+
+/* ── Toast ────────────────────────────────────────── */
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg; // safe
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+}
+
+/* ── Form ─────────────────────────────────────────── */
+function localDateTimeValue() {
+  const d   = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return (
+    d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+    'T' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+  );
+}
+
+function initForm() {
+  const dateInput = document.getElementById('bet-date');
+  dateInput.value = localDateTimeValue();
+
+  document.getElementById('bet-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const descInput = document.getElementById('bet-description');
+    const madeByInput = document.getElementById('bet-madeby');
+
+    /* Trim description (maxlength enforced by the browser too) */
+    const description = descInput.value.trim().slice(0, 500);
+    const madeBy = madeByInput.value;
+    const date   = dateInput.value;
+
+    if (!description) {
+      descInput.focus();
+      showToast('Please describe the bet.');
+      return;
+    }
+    /* Strict allowlist — only 'me' or 'wife' accepted */
+    if (!VALID_PERSONS.has(madeBy)) {
+      madeByInput.focus();
+      showToast('Please select who made the bet.');
+      return;
+    }
+    if (!date) {
+      dateInput.focus();
+      showToast('Please set a date.');
+      return;
+    }
+
+    addBet(description, madeBy, date);
+
+    /* Reset */
+    descInput.value   = '';
+    madeByInput.value = '';
+    dateInput.value   = localDateTimeValue();
+    descInput.focus();
+  });
+}
+
+/* ── Filters ──────────────────────────────────────── */
+function initFilters() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const f = this.getAttribute('data-filter');
+      /* Allowlist: only known filter values */
+      if (f !== 'all' && f !== 'me' && f !== 'wife') return;
+      currentFilter = f;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      render();
+    });
+  });
+}
+
+/* ── Boot ─────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function () {
+  initForm();
+  initFilters();
+  render();
+});
+</script>
+</body>
+</html>
