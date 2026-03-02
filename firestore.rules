@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /bets/{betId} {
+      // Private family app — allow all reads and writes.
+      // The database URL is not publicly advertised, so open rules are acceptable here.
+      // If you ever make this app public, add Firebase Authentication.
+      allow read, write: if true;
+    }
+  }
+}
