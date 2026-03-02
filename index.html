@@ -52,6 +52,29 @@
     /* ── Container ────────────────────────────────── */
     .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
 
+    /* ── Setup banner ─────────────────────────────── */
+    .setup-banner {
+      background: #fef3c7;
+      border: 1.5px solid #d97706;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin: 22px 0 0;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      color: #78350f;
+    }
+    .setup-banner strong { display: block; font-size: 0.97rem; margin-bottom: 8px; }
+    .setup-banner code {
+      background: #fde68a;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.85em;
+    }
+    .setup-banner ol { padding-left: 20px; margin-top: 6px; }
+    .setup-banner li { margin-bottom: 4px; }
+    .setup-banner a { color: #92400e; font-weight: 600; }
+
     /* ── Scoreboard ───────────────────────────────── */
     .scoreboard {
       display: grid;
@@ -237,8 +260,8 @@
     .bet-footer { display: flex; align-items: center; gap: 8px; }
     .bet-resolved-date { font-size: 0.76rem; color: var(--text-muted); flex: 1; }
 
-    /* ── Empty state ──────────────────────────────── */
-    .empty-state {
+    /* ── Empty / loading state ────────────────────── */
+    .empty-state, .loading-state {
       text-align: center; padding: 30px 20px;
       color: var(--text-muted); font-size: 0.88rem;
     }
@@ -280,6 +303,18 @@
 </header>
 
 <div class="container">
+
+  <!-- Setup banner — shown until Firebase config is filled in -->
+  <div id="setup-banner" class="setup-banner" style="display:none">
+    <strong>Firebase Setup Required</strong>
+    To sync bets across devices, paste your Firebase config into <code>index.html</code>:
+    <ol>
+      <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> and create a project</li>
+      <li>Click <strong>Add app</strong> (web &lt;/&gt;) and copy the <code>firebaseConfig</code> object</li>
+      <li>Enable Firestore: <strong>Build → Firestore Database → Create database</strong> (start in test mode)</li>
+      <li>Paste the config values into the <code>firebaseConfig</code> block near the top of <code>index.html</code></li>
+    </ol>
+  </div>
 
   <!-- Scoreboard -->
   <div id="scoreboard" class="scoreboard" role="region" aria-label="Scoreboard"></div>
@@ -332,7 +367,7 @@
       <span class="section-count" id="pending-count">0</span>
     </div>
     <div class="section-body">
-      <div id="pending-bets"></div>
+      <div id="pending-bets"><div class="loading-state">Connecting…</div></div>
     </div>
   </div>
 
@@ -343,7 +378,7 @@
       <span class="section-count" id="resolved-count">0</span>
     </div>
     <div class="section-body">
-      <div id="resolved-bets"></div>
+      <div id="resolved-bets"><div class="loading-state">Connecting…</div></div>
     </div>
   </div>
 
@@ -351,13 +386,35 @@
 
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script>
+<script type="module">
 'use strict';
 
-/* ── Constants ────────────────────────────────────── */
-const STORAGE_KEY = 'bet_tracker_v1';
+import { initializeApp }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc,
+         doc, query, orderBy, onSnapshot }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* ── Firebase Config ──────────────────────────────────
+   1. Go to https://console.firebase.google.com
+   2. Create a project → Add web app → copy the config object here
+   3. Enable Firestore: Build → Firestore Database → Create database (test mode)
+   ──────────────────────────────────────────────────── */
+const firebaseConfig = {
+  apiKey:            "REPLACE_WITH_YOUR_API_KEY",
+  authDomain:        "REPLACE_WITH_YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "REPLACE_WITH_YOUR_PROJECT_ID",
+  storageBucket:     "REPLACE_WITH_YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
+  appId:             "REPLACE_WITH_YOUR_APP_ID"
+};
+
+const IS_CONFIGURED = !firebaseConfig.apiKey.startsWith('REPLACE');
+
+/* ── App state ────────────────────────────────────── */
 let currentFilter = 'all';
-let toastTimer = null;
+let currentBets   = [];
+let toastTimer    = null;
 
 /* ── Data validation ──────────────────────────────── */
 const VALID_PERSONS = new Set(['me', 'wife']);
@@ -376,71 +433,54 @@ function isValidBet(b) {
   );
 }
 
-/* ── Storage ──────────────────────────────────────── */
-function getBets() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidBet);
-  } catch {
-    return [];
-  }
-}
-
-function saveBets(bets) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bets));
-  } catch {
-    showToast('Storage error — changes may not be saved.');
-  }
-}
+/* ── Firestore ────────────────────────────────────── */
+const app     = initializeApp(firebaseConfig);
+const db      = getFirestore(app);
+const betsCol = collection(db, 'bets');
 
 /* ── Bet operations ───────────────────────────────── */
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+async function addBet(description, madeBy, dateStr) {
+  try {
+    await addDoc(betsCol, {
+      description,
+      madeBy,
+      date: dateStr,
+      status: 'pending',
+      winner: null,
+      resolvedDate: null,
+    });
+    showToast('Bet added!');
+  } catch (err) {
+    console.error(err);
+    showToast('Error adding bet — check your connection.');
+  }
 }
 
-function addBet(description, madeBy, dateStr) {
-  const bets = getBets();
-  bets.unshift({
-    id: generateId(),
-    description,
-    madeBy,
-    date: dateStr,
-    status: 'pending',
-    winner: null,
-    resolvedDate: null,
-  });
-  saveBets(bets);
-  render();
-  showToast('Bet added!');
+async function resolveBet(id, winner) {
+  try {
+    await updateDoc(doc(db, 'bets', id), {
+      status: 'resolved',
+      winner,
+      resolvedDate: new Date().toISOString(),
+    });
+    showToast(winner === 'me' ? 'Me wins this one!' : 'Wife wins this one!');
+  } catch (err) {
+    console.error(err);
+    showToast('Error resolving bet — check your connection.');
+  }
 }
 
-function resolveBet(id, winner) {
-  const bets = getBets();
-  const bet = bets.find(b => b.id === id);
-  if (!bet || bet.status === 'resolved') return;
-  bet.status = 'resolved';
-  bet.winner = winner;
-  bet.resolvedDate = new Date().toISOString();
-  saveBets(bets);
-  render();
-  showToast(winner === 'me' ? 'Me wins this one!' : 'Wife wins this one!');
-}
-
-function deleteBet(id) {
-  saveBets(getBets().filter(b => b.id !== id));
-  render();
-  showToast('Bet deleted.');
+async function deleteBet(id) {
+  try {
+    await deleteDoc(doc(db, 'bets', id));
+    showToast('Bet deleted.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error deleting bet — check your connection.');
+  }
 }
 
 /* ── DOM helpers ──────────────────────────────────── */
-/**
- * Create an element with optional attributes and children.
- * String children are always inserted as text nodes (XSS-safe).
- */
 function el(tag, attrs, ...children) {
   const elem = document.createElement(tag);
   if (attrs) {
@@ -452,7 +492,6 @@ function el(tag, attrs, ...children) {
       } else if (k === 'type' || k === 'aria-label' || k === 'title') {
         elem.setAttribute(k, v);
       }
-      // other attributes intentionally ignored to limit surface area
     }
   }
   for (const child of children) {
@@ -487,40 +526,28 @@ function renderScoreboard(bets) {
   const net      = meWins - wifeWins;
 
   const board = document.getElementById('scoreboard');
-  board.textContent = ''; // clear safely
+  board.textContent = '';
 
-  /* Me card */
   const meCard = el('div', { class: 'score-card score-me' });
-  const meName  = el('div', { class: 'score-name' }, 'Me');
-  const meVal   = el('div', { class: 'score-value' }, String(meWins));
-  const meSub   = el('div', { class: 'score-sub' }, meWins === 1 ? '1 win' : meWins + ' wins');
-  meCard.appendChild(meName);
-  meCard.appendChild(meVal);
-  meCard.appendChild(meSub);
+  meCard.appendChild(el('div', { class: 'score-name' }, 'Me'));
+  meCard.appendChild(el('div', { class: 'score-value' }, String(meWins)));
+  meCard.appendChild(el('div', { class: 'score-sub' }, meWins === 1 ? '1 win' : meWins + ' wins'));
   board.appendChild(meCard);
 
-  /* Balance card */
   const netCard = el('div', { class: 'score-card score-net' });
-  const netName = el('div', { class: 'score-name' }, 'Balance');
+  netCard.appendChild(el('div', { class: 'score-name' }, 'Balance'));
   let netText, netSub;
-  if (net === 0)      { netText = 'Even';          netSub = resolved.length ? 'All square' : 'No bets yet'; }
-  else if (net > 0)   { netText = '$' + net;        netSub = 'Wife owes Me'; }
-  else                { netText = '$' + (-net);      netSub = 'Me owes Wife'; }
-  const netVal  = el('div', { class: 'score-value' }, netText);
-  const netSubEl = el('div', { class: 'score-sub' }, netSub);
-  netCard.appendChild(netName);
-  netCard.appendChild(netVal);
-  netCard.appendChild(netSubEl);
+  if (net === 0)      { netText = 'Even';      netSub = resolved.length ? 'All square' : 'No bets yet'; }
+  else if (net > 0)   { netText = '$' + net;   netSub = 'Wife owes Me'; }
+  else                { netText = '$' + (-net); netSub = 'Me owes Wife'; }
+  netCard.appendChild(el('div', { class: 'score-value' }, netText));
+  netCard.appendChild(el('div', { class: 'score-sub' }, netSub));
   board.appendChild(netCard);
 
-  /* Wife card */
   const wifeCard = el('div', { class: 'score-card score-wife' });
-  const wifeName  = el('div', { class: 'score-name' }, 'Wife');
-  const wifeVal   = el('div', { class: 'score-value' }, String(wifeWins));
-  const wifeSub   = el('div', { class: 'score-sub' }, wifeWins === 1 ? '1 win' : wifeWins + ' wins');
-  wifeCard.appendChild(wifeName);
-  wifeCard.appendChild(wifeVal);
-  wifeCard.appendChild(wifeSub);
+  wifeCard.appendChild(el('div', { class: 'score-name' }, 'Wife'));
+  wifeCard.appendChild(el('div', { class: 'score-value' }, String(wifeWins)));
+  wifeCard.appendChild(el('div', { class: 'score-sub' }, wifeWins === 1 ? '1 win' : wifeWins + ' wins'));
   board.appendChild(wifeCard);
 }
 
@@ -530,24 +557,17 @@ function createBetCard(bet) {
     ? (bet.winner === 'me' ? 'bet-resolved-me' : 'bet-resolved-wife')
     : 'bet-pending';
 
-  const card = el('div', { class: 'bet-card ' + resolvedClass });
-
-  /* Header row */
+  const card   = el('div', { class: 'bet-card ' + resolvedClass });
   const header = el('div', { class: 'bet-header' });
   const meta   = el('div', { class: 'bet-meta' });
 
-  const personBadge = el('span', {
+  meta.appendChild(el('span', {
     class: 'bet-person bet-person-' + bet.madeBy,
     'aria-label': 'Bet made by ' + (bet.madeBy === 'me' ? 'Me' : 'Wife'),
-  }, bet.madeBy === 'me' ? 'Me' : 'Wife');
-  meta.appendChild(personBadge);
-
-  const dateSpan = el('span', { class: 'bet-date' }, formatDateTime(bet.date));
-  meta.appendChild(dateSpan);
-
+  }, bet.madeBy === 'me' ? 'Me' : 'Wife'));
+  meta.appendChild(el('span', { class: 'bet-date' }, formatDateTime(bet.date)));
   header.appendChild(meta);
 
-  /* Status badge */
   let badgeClass, badgeText;
   if (bet.status === 'pending') {
     badgeClass = 'bet-badge badge-pending';
@@ -556,73 +576,55 @@ function createBetCard(bet) {
     badgeClass = 'bet-badge badge-resolved-' + bet.winner;
     badgeText  = (bet.winner === 'me' ? 'Me' : 'Wife') + ' won';
   }
-  const badge = el('span', { class: badgeClass }, badgeText);
-  header.appendChild(badge);
-
+  header.appendChild(el('span', { class: badgeClass }, badgeText));
   card.appendChild(header);
 
-  /* Description — user content via textContent (XSS-safe) */
   const desc = el('div', { class: 'bet-description' });
   desc.textContent = bet.description;
   card.appendChild(desc);
 
-  /* Actions */
   if (bet.status === 'pending') {
     const actions = el('div', { class: 'bet-actions' });
     actions.appendChild(el('span', { class: 'resolve-label' }, 'Resolve:'));
 
-    const meBtn = el('button', {
+    actions.appendChild(el('button', {
       class: 'btn btn-me',
       'aria-label': 'Mark Me as winner',
       onclick: () => {
-        if (window.confirm('Mark "Me" as the winner of this bet?')) {
-          resolveBet(bet.id, 'me');
-        }
+        if (window.confirm('Mark "Me" as the winner of this bet?')) resolveBet(bet.id, 'me');
       },
-    }, 'Me Won');
-    actions.appendChild(meBtn);
+    }, 'Me Won'));
 
-    const wifeBtn = el('button', {
+    actions.appendChild(el('button', {
       class: 'btn btn-wife',
       'aria-label': 'Mark Wife as winner',
       onclick: () => {
-        if (window.confirm('Mark "Wife" as the winner of this bet?')) {
-          resolveBet(bet.id, 'wife');
-        }
+        if (window.confirm('Mark "Wife" as the winner of this bet?')) resolveBet(bet.id, 'wife');
       },
-    }, 'Wife Won');
-    actions.appendChild(wifeBtn);
+    }, 'Wife Won'));
 
-    const delBtn = el('button', {
+    actions.appendChild(el('button', {
       class: 'btn btn-delete',
       'aria-label': 'Delete this bet',
       onclick: () => {
-        if (window.confirm('Delete this bet permanently?')) {
-          deleteBet(bet.id);
-        }
+        if (window.confirm('Delete this bet permanently?')) deleteBet(bet.id);
       },
-    }, 'Delete');
-    actions.appendChild(delBtn);
+    }, 'Delete'));
 
     card.appendChild(actions);
-
   } else {
     const footer = el('div', { class: 'bet-footer' });
-
     const resolvedDate = el('span', { class: 'bet-resolved-date' });
     resolvedDate.textContent = 'Resolved: ' + formatDateTime(bet.resolvedDate);
     footer.appendChild(resolvedDate);
 
-    const delBtn = el('button', {
+    footer.appendChild(el('button', {
       class: 'btn btn-delete',
       'aria-label': 'Delete this bet',
       onclick: () => {
-        if (window.confirm('Delete this resolved bet?')) {
-          deleteBet(bet.id);
-        }
+        if (window.confirm('Delete this resolved bet?')) deleteBet(bet.id);
       },
-    }, 'Delete');
-    footer.appendChild(delBtn);
+    }, 'Delete'));
 
     card.appendChild(footer);
   }
@@ -631,8 +633,7 @@ function createBetCard(bet) {
 }
 
 /* ── Render ───────────────────────────────────────── */
-function render() {
-  const allBets = getBets();
+function render(allBets) {
   renderScoreboard(allBets);
 
   const filtered = currentFilter === 'all'
@@ -642,7 +643,6 @@ function render() {
   const pending  = filtered.filter(b => b.status === 'pending');
   const resolved = filtered.filter(b => b.status === 'resolved');
 
-  /* Pending section */
   const pendingEl = document.getElementById('pending-bets');
   pendingEl.textContent = '';
   document.getElementById('pending-count').textContent = String(pending.length);
@@ -652,7 +652,6 @@ function render() {
     pending.forEach(b => pendingEl.appendChild(createBetCard(b)));
   }
 
-  /* Resolved section */
   const resolvedEl = document.getElementById('resolved-bets');
   resolvedEl.textContent = '';
   document.getElementById('resolved-count').textContent = String(resolved.length);
@@ -666,7 +665,7 @@ function render() {
 /* ── Toast ────────────────────────────────────────── */
 function showToast(msg) {
   const toast = document.getElementById('toast');
-  toast.textContent = msg; // safe
+  toast.textContent = msg;
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
@@ -686,37 +685,22 @@ function initForm() {
   const dateInput = document.getElementById('bet-date');
   dateInput.value = localDateTimeValue();
 
-  document.getElementById('bet-form').addEventListener('submit', function (e) {
+  document.getElementById('bet-form').addEventListener('submit', async function (e) {
     e.preventDefault();
 
-    const descInput = document.getElementById('bet-description');
+    const descInput   = document.getElementById('bet-description');
     const madeByInput = document.getElementById('bet-madeby');
 
-    /* Trim description (maxlength enforced by the browser too) */
     const description = descInput.value.trim().slice(0, 500);
     const madeBy = madeByInput.value;
     const date   = dateInput.value;
 
-    if (!description) {
-      descInput.focus();
-      showToast('Please describe the bet.');
-      return;
-    }
-    /* Strict allowlist — only 'me' or 'wife' accepted */
-    if (!VALID_PERSONS.has(madeBy)) {
-      madeByInput.focus();
-      showToast('Please select who made the bet.');
-      return;
-    }
-    if (!date) {
-      dateInput.focus();
-      showToast('Please set a date.');
-      return;
-    }
+    if (!description) { descInput.focus();   showToast('Please describe the bet.');        return; }
+    if (!VALID_PERSONS.has(madeBy)) { madeByInput.focus(); showToast('Please select who made the bet.'); return; }
+    if (!date)        { dateInput.focus();   showToast('Please set a date.');               return; }
 
-    addBet(description, madeBy, date);
+    await addBet(description, madeBy, date);
 
-    /* Reset */
     descInput.value   = '';
     madeByInput.value = '';
     dateInput.value   = localDateTimeValue();
@@ -729,21 +713,33 @@ function initFilters() {
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', function () {
       const f = this.getAttribute('data-filter');
-      /* Allowlist: only known filter values */
       if (f !== 'all' && f !== 'me' && f !== 'wife') return;
       currentFilter = f;
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
-      render();
+      render(currentBets);
     });
   });
 }
 
 /* ── Boot ─────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', function () {
-  initForm();
-  initFilters();
-  render();
+if (!IS_CONFIGURED) {
+  document.getElementById('setup-banner').style.display = 'block';
+}
+
+initForm();
+initFilters();
+
+// Real-time listener — fires immediately and on every change from any device
+const q = query(betsCol, orderBy('date', 'desc'));
+onSnapshot(q, (snapshot) => {
+  currentBets = snapshot.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(isValidBet);
+  render(currentBets);
+}, (err) => {
+  console.error('Firestore error:', err);
+  showToast('Connection error — check Firebase config.');
 });
 </script>
 </body>
