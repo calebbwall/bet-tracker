@@ -298,7 +298,7 @@
 <header class="app-header">
   <div class="container">
     <h1>$1 Bet Tracker</h1>
-    <p>Me vs. Wife &mdash; every dollar counts</p>
+    <p>Caleb vs. Ally &mdash; every dollar counts</p>
   </div>
 </header>
 
@@ -338,8 +338,8 @@
               <label for="bet-madeby">Who bet?</label>
               <select id="bet-madeby">
                 <option value="">Select...</option>
-                <option value="me">Me</option>
-                <option value="wife">Wife</option>
+                <option value="me">Caleb</option>
+                <option value="wife">Ally</option>
               </select>
             </div>
             <div class="form-group">
@@ -356,8 +356,8 @@
   <!-- Filter bar -->
   <div class="filter-bar" role="group" aria-label="Filter bets by person">
     <button class="filter-btn active" data-filter="all">All Bets</button>
-    <button class="filter-btn" data-filter="me">My Bets</button>
-    <button class="filter-btn" data-filter="wife">Wife's Bets</button>
+    <button class="filter-btn" data-filter="me">Caleb's Bets</button>
+    <button class="filter-btn" data-filter="wife">Ally's Bets</button>
   </div>
 
   <!-- Pending -->
@@ -464,7 +464,7 @@ async function resolveBet(id, winner) {
       winner,
       resolvedDate: new Date().toISOString(),
     });
-    showToast(winner === 'me' ? 'Me wins this one!' : 'Wife wins this one!');
+    showToast(winner === 'me' ? 'Caleb wins this one!' : 'Ally wins this one!');
   } catch (err) {
     console.error(err);
     showToast('Error resolving bet — check your connection.');
@@ -530,7 +530,7 @@ function renderScoreboard(bets) {
   board.textContent = '';
 
   const meCard = el('div', { class: 'score-card score-me' });
-  meCard.appendChild(el('div', { class: 'score-name' }, 'Me'));
+  meCard.appendChild(el('div', { class: 'score-name' }, 'Caleb'));
   meCard.appendChild(el('div', { class: 'score-value' }, String(meWins)));
   meCard.appendChild(el('div', { class: 'score-sub' }, meWins === 1 ? '1 win' : meWins + ' wins'));
   board.appendChild(meCard);
@@ -539,14 +539,14 @@ function renderScoreboard(bets) {
   netCard.appendChild(el('div', { class: 'score-name' }, 'Balance'));
   let netText, netSub;
   if (net === 0)      { netText = 'Even';      netSub = resolved.length ? 'All square' : 'No bets yet'; }
-  else if (net > 0)   { netText = '$' + net;   netSub = 'Wife owes Me'; }
-  else                { netText = '$' + (-net); netSub = 'Me owes Wife'; }
+  else if (net > 0)   { netText = '$' + net;   netSub = 'Ally owes Caleb'; }
+  else                { netText = '$' + (-net); netSub = 'Caleb owes Ally'; }
   netCard.appendChild(el('div', { class: 'score-value' }, netText));
   netCard.appendChild(el('div', { class: 'score-sub' }, netSub));
   board.appendChild(netCard);
 
   const wifeCard = el('div', { class: 'score-card score-wife' });
-  wifeCard.appendChild(el('div', { class: 'score-name' }, 'Wife'));
+  wifeCard.appendChild(el('div', { class: 'score-name' }, 'Ally'));
   wifeCard.appendChild(el('div', { class: 'score-value' }, String(wifeWins)));
   wifeCard.appendChild(el('div', { class: 'score-sub' }, wifeWins === 1 ? '1 win' : wifeWins + ' wins'));
   board.appendChild(wifeCard);
@@ -564,8 +564,8 @@ function createBetCard(bet) {
 
   meta.appendChild(el('span', {
     class: 'bet-person bet-person-' + bet.madeBy,
-    'aria-label': 'Bet made by ' + (bet.madeBy === 'me' ? 'Me' : 'Wife'),
-  }, bet.madeBy === 'me' ? 'Me' : 'Wife'));
+    'aria-label': 'Bet made by ' + (bet.madeBy === 'me' ? 'Caleb' : 'Ally'),
+  }, bet.madeBy === 'me' ? 'Caleb' : 'Ally'));
   meta.appendChild(el('span', { class: 'bet-date' }, formatDateTime(bet.date)));
   header.appendChild(meta);
 
@@ -575,7 +575,7 @@ function createBetCard(bet) {
     badgeText  = 'Pending';
   } else {
     badgeClass = 'bet-badge badge-resolved-' + bet.winner;
-    badgeText  = (bet.winner === 'me' ? 'Me' : 'Wife') + ' won';
+    badgeText  = (bet.winner === 'me' ? 'Caleb' : 'Ally') + ' won';
   }
   header.appendChild(el('span', { class: badgeClass }, badgeText));
   card.appendChild(header);
@@ -590,19 +590,19 @@ function createBetCard(bet) {
 
     actions.appendChild(el('button', {
       class: 'btn btn-me',
-      'aria-label': 'Mark Me as winner',
+      'aria-label': 'Mark Caleb as winner',
       onclick: () => {
-        if (window.confirm('Mark "Me" as the winner of this bet?')) resolveBet(bet.id, 'me');
+        if (window.confirm('Mark "Caleb" as the winner of this bet?')) resolveBet(bet.id, 'me');
       },
-    }, 'Me Won'));
+    }, 'Caleb Won'));
 
     actions.appendChild(el('button', {
       class: 'btn btn-wife',
-      'aria-label': 'Mark Wife as winner',
+      'aria-label': 'Mark Ally as winner',
       onclick: () => {
-        if (window.confirm('Mark "Wife" as the winner of this bet?')) resolveBet(bet.id, 'wife');
+        if (window.confirm('Mark "Ally" as the winner of this bet?')) resolveBet(bet.id, 'wife');
       },
-    }, 'Wife Won'));
+    }, 'Ally Won'));
 
     actions.appendChild(el('button', {
       class: 'btn btn-delete',
